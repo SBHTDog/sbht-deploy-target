@@ -99,18 +99,18 @@ jobs:
                   echo "New Task Definition ARN: $NEW_TASK_DEF_ARN"
 
                   # --- 4단계 (AppSpec 준비 - 개선된 방식) ---
-                  echo "Using appspec template: .github/appspec.template.json"
+                  echo "Using appspec template: .github/appspec.template.yml"
 
-                  # 템플릿(.github/appspec.template.json)을 실제 사용할 appspec.json으로 복사
-                  cp .github/appspec.template.json appspec.json
+                  # 템플릿(.github/appspec.template.yml)을 실제 사용할 appspec.yml으로 복사
+                  cp .github/appspec.template.yml appspec.yml
 
-                  # 복사된 appspec.json의 "REPLACE_TASK_ARN"을 3단계에서 받은 실제 ARN으로 교체
-                  sed -i -e "s|REPLACE_TASK_ARN|$NEW_TASK_DEF_ARN|g" appspec.json
+                  # 복사된 appspec.yml의 "REPLACE_TASK_ARN"을 3단계에서 받은 실제 ARN으로 교체
+                  sed -i -e "s|REPLACE_TASK_ARN|$NEW_TASK_DEF_ARN|g" appspec.yml
 
                   # --- 5단계 (CodeDeploy 트리거) ---
                   echo "Creating CodeDeploy deployment..."
                   aws deploy create-deployment \
                     --application-name sbht-aws-app \
                     --deployment-group-name sbht-aws-deployment-group \
-                    --revision '{"revisionType": "AppSpecContent", "appSpecContent": {"content": "file://appspec.json"}}' \
+                    --revision '{"revisionType": "AppSpecContent", "appSpecContent": {"content": "file://appspec.yml"}}' \
                     --description "Deployment from GitHub Actions ${{ github.sha }}"
