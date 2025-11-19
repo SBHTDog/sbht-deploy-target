@@ -109,8 +109,12 @@ jobs:
 
                   # --- 5단계 (CodeDeploy 트리거) ---
                   echo "Creating CodeDeploy deployment..."
+                  
+                  # Read appspec.yml content and escape it for JSON
+                  APPSPEC_CONTENT=$(cat appspec.yml | jq -Rs .)
+                  
                   aws deploy create-deployment \
                     --application-name sbht-aws-app \
                     --deployment-group-name sbht-aws-deployment-group \
-                    --revision '{"revisionType": "AppSpecContent", "appSpecContent": {"content": "file://appspec.yml"}}' \
+                    --revision "{\"revisionType\": \"AppSpecContent\", \"appSpecContent\": {\"content\": $APPSPEC_CONTENT}}" \
                     --description "Deployment from GitHub Actions ${{ github.sha }}"
