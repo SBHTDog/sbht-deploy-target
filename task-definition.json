@@ -1,0 +1,78 @@
+{
+    "containerDefinitions": [
+        {
+            "cpu": 0,
+            "environment": [],
+            "essential": true,
+            "image": "652275404406.dkr.ecr.ap-northeast-2.amazonaws.com/sbht-aws-ecr:latest",
+            "logConfiguration": {
+                "logDriver": "awslogs",
+                "options": {
+                    "awslogs-group": "/ecs/sbht-aws-cluster",
+                    "awslogs-region": "ap-northeast-2",
+                    "awslogs-stream-prefix": "ecs"
+                }
+            },
+            "mountPoints": [],
+            "name": "app",
+            "portMappings": [
+                {
+                    "containerPort": 3000,
+                    "hostPort": 3000,
+                    "protocol": "tcp"
+                }
+            ],
+            "secrets": [
+                {
+                    "name": "DB_HOST",
+                    "valueFrom": "arn:aws:ssm:ap-northeast-2:652275404406:parameter/sbht-aws/dev/db/host"
+                },
+                {
+                    "name": "DB_PORT",
+                    "valueFrom": "arn:aws:ssm:ap-northeast-2:652275404406:parameter/sbht-aws/dev/db/port"
+                },
+                {
+                    "name": "DB_NAME",
+                    "valueFrom": "arn:aws:ssm:ap-northeast-2:652275404406:parameter/sbht-aws/dev/db/name"
+                },
+                {
+                    "name": "DB_USERNAME",
+                    "valueFrom": "arn:aws:ssm:ap-northeast-2:652275404406:parameter/sbht-aws/dev/db/username"
+                },
+                {
+                    "name": "DB_PASSWORD",
+                    "valueFrom": "arn:aws:ssm:ap-northeast-2:652275404406:parameter/sbht-aws/dev/db/password"
+                }
+            ],
+            "systemControls": [],
+            "volumesFrom": []
+        }
+    ],
+    "cpu": "256",
+    "executionRoleArn": "arn:aws:iam::652275404406:role/sbht-aws-cluster-ecs-task-execution-role",
+    "family": "sbht-aws-app",
+    "memory": "512",
+    "networkMode": "awsvpc",
+    "placementConstraints": [],
+    "registeredAt": "2025-11-18T06:01:14.484Z",
+    "registeredBy": "arn:aws:iam::652275404406:user/terraform_acc",
+    "requiresCompatibilities": [
+        "FARGATE"
+    ],
+    "taskRoleArn": "arn:aws:iam::652275404406:role/sbht-aws-cluster-ecs-task-role",
+    "volumes": [],
+    "tags": [
+        {
+            "key": "Project",
+            "value": "sbht-aws"
+        },
+        {
+            "key": "Environment",
+            "value": "dev"
+        },
+        {
+            "key": "ManagedBy",
+            "value": "Terraform"
+        }
+    ]
+}
