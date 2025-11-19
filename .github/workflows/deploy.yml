@@ -110,7 +110,7 @@ jobs:
           # --- 5단계 (CodeDeploy 트리거) ---
           echo "Creating CodeDeploy deployment..."
           aws deploy create-deployment \
-            --application-name sbht-aws-app \   # [수정!] Terraform으로 만든 실제 CodeDeploy 앱 이름
-            --deployment-group-name sbht-aws-deployment-group \ # [수정!] Terraform으로 만든 실제 배포 그룹 이름
+            --application-name sbht-aws-app \
+            --deployment-group-name sbht-aws-deployment-group \
             --revision '{"revisionType": "AppSpecContent", "appSpecContent": {"content": file://appspec.json}}' \
             --description "Deployment from GitHub Actions ${{ github.sha }}"
