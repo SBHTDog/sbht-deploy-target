@@ -1,116 +1,116 @@
 name: CI/CD Pipeline for Target Service
 
 on:
-  push:
-    branches:
-      - master
-  pull_request:
-    branches:
-      - master
+    push:
+        branches:
+            - master
+    pull_request:
+        branches:
+            - master
 
 jobs:
-  build-and-deploy:
-    runs-on: ubuntu-latest
-    permissions:
-      id-token: write # AWS OIDC 인증용
-      contents: read   # 코드 체크아웃용
+    build-and-deploy:
+        runs-on: ubuntu-latest
+        permissions:
+            id-token: write # AWS OIDC 인증용
+            contents: read # 코드 체크아웃용
 
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+        steps:
+            - name: Checkout repository
+              uses: actions/checkout@v4
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20' # 프로젝트에 맞는 버전으로 변경
-          cache: 'npm'
+            - name: Set up Node.js
+              uses: actions/setup-node@v4
+              with:
+                  node-version: "20" # 프로젝트에 맞는 버전으로 변경
+                  cache: "npm"
 
-      - name: Install dependencies
-        run: npm ci
+            - name: Install dependencies
+              run: npm ci
 
-      - name: Run Lint
-        run: npm run lint
+            - name: Run Lint
+              run: npm run lint
 
-      - name: Run Test
-        # Pull Request일 때만 테스트를 실행하고, main 브랜치 Push 시에는 생략
-        if: github.event_name == 'pull_request'
-        run: npm run test
+            - name: Run Test
+              # Pull Request일 때만 테스트를 실행하고, main 브랜치 Push 시에는 생략
+              if: github.event_name == 'pull_request'
+              run: npm run test
 
-      - name: Configure AWS Credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          role-to-assume: arn:aws:iam::652275404406:role/sbht-aws-github-actions-role # aws iam 이름
-          aws-region: ap-northeast-2
+            - name: Configure AWS Credentials
+              uses: aws-actions/configure-aws-credentials@v4
+              with:
+                  role-to-assume: arn:aws:iam::652275404406:role/sbht-aws-github-actions-role # aws iam 이름
+                  aws-region: ap-northeast-2
 
-      - name: Log in to Amazon ECR
-        uses: aws-actions/amazon-ecr-login@v2
-        id: login-ecr
+            - name: Log in to Amazon ECR
+              uses: aws-actions/amazon-ecr-login@v2
+              id: login-ecr
 
-      - name: Define Image URI
-        id: image
-        env:
-          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-          ECR_REPOSITORY: sbht-aws-ecr # ECR에 생성한 레포지토리 이름: 이후 terraform과 맞추기
-          IMAGE_TAG: ${{ github.sha }}
-        run: echo "uri=${ECR_REGISTRY}/${ECR_REPOSITORY}:${IMAGE_TAG}" >> $GITHUB_OUTPUT
+            - name: Define Image URI
+              id: image
+              env:
+                  ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+                  ECR_REPOSITORY: sbht-aws-ecr # ECR에 생성한 레포지토리 이름: 이후 terraform과 맞추기
+                  IMAGE_TAG: ${{ github.sha }}
+              run: echo "uri=${ECR_REGISTRY}/${ECR_REPOSITORY}:${IMAGE_TAG}" >> $GITHUB_OUTPUT
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+            - name: Set up Docker Buildx
+              uses: docker/setup-buildx-action@v3
 
-      - name: Build Docker image (local)
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          load: true # Trivy 스캔을 위해 바로 push하지 않고 로컬로 불러움
-          tags: ${{ steps.image.outputs.uri }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+            - name: Build Docker image (local)
+              uses: docker/build-push-action@v5
+              with:
+                  context: .
+                  load: true # Trivy 스캔을 위해 바로 push하지 않고 로컬로 불러움
+                  tags: ${{ steps.image.outputs.uri }}
+                  cache-from: type=gha
+                  cache-to: type=gha,mode=max
 
-      - name: Scan image with Trivy
-        uses: aquasecurity/trivy-action@master
-        with:
-          image-ref: ${{ steps.image.outputs.uri }}
-          format: 'table'
-          exit-code: '0' # 취약점 발견 시 0이 아닌 코드로 종료 (워크플로우 실패)
-          ignore-unfixed: true
-          vuln-type: 'os,library'
-          severity: 'CRITICAL,HIGH' # CRITICAL 또는 HIGH 등급일 시 실패
+            - name: Scan image with Trivy
+              uses: aquasecurity/trivy-action@master
+              with:
+                  image-ref: ${{ steps.image.outputs.uri }}
+                  format: "table"
+                  exit-code: "0" # 취약점 발견 시 0이 아닌 코드로 종료 (워크플로우 실패)
+                  ignore-unfixed: true
+                  vuln-type: "os,library"
+                  severity: "CRITICAL,HIGH" # CRITICAL 또는 HIGH 등급일 시 실패
 
-      - name: Push image to ECR # ECR에 새로운 도커 이미지 push
-        if: github.event_name != 'pull_request'
-        run: docker push ${{ steps.image.outputs.uri }}
+            - name: Push image to ECR # ECR에 새로운 도커 이미지 push
+              if: github.event_name != 'pull_request'
+              run: docker push ${{ steps.image.outputs.uri }}
 
-      - name: Update ECS Task Definition and Trigger CodeDeploy
-        if: github.event_name != 'pull_request'
-        run: |
-          echo "Starting Blue/Green deployment..."
-          
-          # --- 1, 2단계 (Task Def 준비) ---
-          echo "Using task definition template: task-definition.json"
-          
-          # 템플릿의 "REPLACE_IMAGE_URI"를 4단계에서 만든 실제 이미지 URI로 교체
-          sed -i -e "s|REPLACE_IMAGE_URI|${{ steps.image.outputs.uri }}|g" task-definition.json
-          
-          # --- 3단계 (Task Def 등록) ---
-          echo "Registering new task definition..."
-          # 수정된 task-definition.json을 AWS에 제출하고, 새 ARN을 변수에 저장
-          NEW_TASK_DEF_JSON=$(aws ecs register-task-definition --cli-input-json file://task-definition.json)
-          NEW_TASK_DEF_ARN=$(echo $NEW_TASK_DEF_JSON | jq -r '.taskDefinition.taskDefinitionArn')
-          echo "New Task Definition ARN: $NEW_TASK_DEF_ARN"
+            - name: Update ECS Task Definition and Trigger CodeDeploy
+              if: github.event_name != 'pull_request'
+              run: |
+                  echo "Starting Blue/Green deployment..."
 
-          # --- 4단계 (AppSpec 준비 - 개선된 방식) ---
-          echo "Using appspec template: .github/appspec.template.json"
-          
-          # 템플릿(.github/appspec.template.json)을 실제 사용할 appspec.json으로 복사
-          cp .github/appspec.template.json appspec.json
-          
-          # 복사된 appspec.json의 "REPLACE_TASK_ARN"을 3단계에서 받은 실제 ARN으로 교체
-          sed -i -e "s|REPLACE_TASK_ARN|$NEW_TASK_DEF_ARN|g" appspec.json
+                  # --- 1, 2단계 (Task Def 준비) ---
+                  echo "Using task definition template: task-definition.json"
 
-          # --- 5단계 (CodeDeploy 트리거) ---
-          echo "Creating CodeDeploy deployment..."
-          aws deploy create-deployment \
-            --application-name sbht-aws-app \
-            --deployment-group-name sbht-aws-deployment-group \
-            --revision '{"revisionType": "AppSpecContent", "appSpecContent": {"content": file://appspec.json}}' \
-            --description "Deployment from GitHub Actions ${{ github.sha }}"
+                  # 템플릿의 "REPLACE_IMAGE_URI"를 4단계에서 만든 실제 이미지 URI로 교체
+                  sed -i -e "s|REPLACE_IMAGE_URI|${{ steps.image.outputs.uri }}|g" task-definition.json
+
+                  # --- 3단계 (Task Def 등록) ---
+                  echo "Registering new task definition..."
+                  # 수정된 task-definition.json을 AWS에 제출하고, 새 ARN을 변수에 저장
+                  NEW_TASK_DEF_JSON=$(aws ecs register-task-definition --cli-input-json file://task-definition.json)
+                  NEW_TASK_DEF_ARN=$(echo $NEW_TASK_DEF_JSON | jq -r '.taskDefinition.taskDefinitionArn')
+                  echo "New Task Definition ARN: $NEW_TASK_DEF_ARN"
+
+                  # --- 4단계 (AppSpec 준비 - 개선된 방식) ---
+                  echo "Using appspec template: .github/appspec.template.json"
+
+                  # 템플릿(.github/appspec.template.json)을 실제 사용할 appspec.json으로 복사
+                  cp .github/appspec.template.json appspec.json
+
+                  # 복사된 appspec.json의 "REPLACE_TASK_ARN"을 3단계에서 받은 실제 ARN으로 교체
+                  sed -i -e "s|REPLACE_TASK_ARN|$NEW_TASK_DEF_ARN|g" appspec.json
+
+                  # --- 5단계 (CodeDeploy 트리거) ---
+                  echo "Creating CodeDeploy deployment..."
+                  aws deploy create-deployment \
+                    --application-name sbht-aws-app \
+                    --deployment-group-name sbht-aws-deployment-group \
+                    --revision '{"revisionType": "AppSpecContent", "appSpecContent": {"content": "file://appspec.json"}}' \
+                    --description "Deployment from GitHub Actions ${{ github.sha }}"
